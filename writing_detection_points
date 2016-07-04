@@ -1,0 +1,56 @@
+# -*- coding: utf-8 -*-
+"""
+Spyder Editor
+
+This is a temporary script file.
+"""
+
+
+import numpy as np
+import cv2
+import os
+os.chdir("C:/Users/sabarna.hazra/Desktop/Video Analytics/video_process/tracking/object-tracker-master")
+def inside(r, q):
+    rx, ry, rw, rh = r
+    qx, qy, qw, qh = q
+    return rx > qx and ry > qy and rx + rw < qx + qw and ry + rh < qy + qh
+
+
+def draw_detections(img, rects,file_r,thickness = 1):
+    for x, y, w, h in rects:
+        # the HOG detector returns slightly larger rectangles than the real objects.
+        # so we slightly shrink the rectangles to get a nicer output.
+        pad_w, pad_h = int(0.25*w), int(0.15*h)
+        cv2.rectangle(img, (x+pad_w, y+pad_h), (x+w-pad_w, y+h-pad_h), (0, 255, 0), thickness)
+        file_r.write(str(x+pad_w) + ",")
+        file_r.write(str(y+pad_h) + ",")
+        file_r.write(str(x+w-pad_w) + ",")
+        file_r.write(str(y+h-pad_h) + ",")
+
+
+def gamma_correction(img, correction):
+    img = img/255.0
+    img = cv2.pow(img, correction)
+    return np.uint8(img*255)
+
+human_list = []
+i=1
+if __name__ == '__main__':
+
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector( cv2.HOGDescriptor_getDefaultPeopleDetector() )
+    cap=cv2.VideoCapture("video.mp4")
+    cap.set(0,20000)
+    while True:
+        _,frame=cap.read()
+        file_r=open("points/points_detect"+str(i)+".txt","w")
+        found,w=hog.detectMultiScale(frame, winStride=(8,8), padding=(16,16), scale=1.05)
+        draw_detections(frame,found,file_r)
+        human_list.append(len(found))
+        cv2.imshow('feed',frame)
+        i+=1
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        file_r.close()
+    cv2.destroyAllWindows()
+    file_r.close()
