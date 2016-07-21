@@ -1,0 +1,744 @@
+"""GUI for manual tagging of store transaction videos."""
+
+####################################################################
+# Title:	Laser
+# Purpose:	GUI for manual tagging of store transaction videos
+# Version:	1.1
+# Creation:	14 June 2016
+#
+# Authors:	Ashok Dibbada, Hemanth Talla
+# Comments:	Working Version 5.1 (Export File Format)
+# Last edited:	25 June 2016
+########################################################
+
+import Tkinter as tk
+import os
+import sys
+import ttk
+import re
+from pandas import DataFrame
+import pandas as pd
+import numpy as np
+from functools import partial
+import vlc
+import ntpath
+import tkFileDialog as tf
+import datetime as dt
+from datetime import datetime as sdt
+import time
+import calendar
+import tkMessageBox
+from decimal import *
+import csv
+import codecs
+# from ftplib import FTP
+
+# Dataframe Columns
+global cust_num, cust_desc, cust_count, cust_wst, cust_wet, cust_twt, \
+	cust_cst, cust_cet, cust_tct, attr_list, user_click,cust_desk,cust_thr
+
+cust_num, cust_desc, cust_count, cust_wst, cust_wet, cust_twt, cust_cst, \
+	cust_cet, cust_tct, attr_list, user_click,cust_desk,cust_thr = ([] for i in range(13))
+
+global store_num, store_city, video_date, video_start, video_day
+store_num, store_city, video_date, video_start,video_day = ([] for i in range(5))
+
+global rate_latest
+rate_latest = 2.0
+
+global file_path, savefilePath
+file_path = ''
+
+# Path for generated transactions .csv file
+dropfilePath = '/home/user/Dropbox/Admin/Deliver'
+
+# Path for master.csv
+global downloadPath
+downloadPath = '/home/user/Desktop/test1.csv'
+
+
+# VLC functions
+def FileOpen(event):
+	"""Opens the video file."""
+	global p, file_path
+	file_path = tf.askopenfilename(filetypes=[("Video files", ("*.avi", "*.mp4", "*.mkv", ".*wmv", ".*mov"))])
+	p = vlc.MediaPlayer(file_path)
+	print file_path
+
+def progressCalc(video_name):
+	readings = []
+	try :
+		with codecs.open(downloadPath,'rU','utf-8') as cf :
+			reader = csv.reader(cf)
+			for row in reader :
+				readings.append(row)
+		df = pd.DataFrame.from_records(readings[1:], columns = readings.pop(0))
+		for i in xrange(len(df['FileName'])):
+			if df['FileName'][i] == video_name:
+				count = df['TxCount'][i]
+				count = int(count)
+				print count
+				break
+			else:
+				pass
+		return count
+	except :
+		ValueError
+	
+
+
+def start(event):
+	p.play()
+	video_name = ntpath.basename(file_path)
+	l1.config(text="Playing %s" %video_name)
+	timeline()
+	global tcount
+	tcount = 0
+	tcount = progressCalc(video_name)
+
+def pause(event):
+	if p.is_playing() > 0 :
+		p.pause()
+		l1.config(text="Paused")
+	else :
+		p.pause()
+		l1.config(text="Playing")
+
+def forward(event):
+	if p.get_time() <= p.get_length():
+		if p.get_length() - 20000 < p.get_time():
+			p.set_time(p.get_length() - 10000)
+			l1.config(text="Last 10 sec(s)")
+		else :
+			p.set_time(p.get_time() + 15000)
+			l1.config(text=">> 15 sec(s)")
+	else :
+		pass
+
+
+def rewind(event):
+	if p.get_time() > 0 and p.get_time() <= p.get_length() :
+		p.set_time(p.get_time() - 15000)
+		l1.config(text="<< 15 sec(s)")
+	else:
+		pass
+
+def rate_one(event):
+	global rate_latest
+	if p.get_rate() == 1:
+		p.set_rate(rate_latest)
+		l1.config(text ="Speed:"+str(p.get_rate())+"x")
+	else:
+		rate_latest = p.get_rate()
+		p.set_rate(1)
+		l1.config(text ="Speed:"+str(p.get_rate())+"x")
+
+def rate_up(event):
+	p.set_rate(p.get_rate() + 1)
+	l1.config(text ="Speed:"+str(p.get_rate())+"x")
+
+def rate_down(event):
+	if p.get_rate() > 1 :
+		p.set_rate(p.get_rate() - 1)
+		l1.config(text ="Speed:"+str(p.get_rate())+"x")
+	else:
+		l1.config(text ="Speed:"+str(p.get_rate())+"x")
+
+def stop(event):
+	p.stop()
+
+def timeline():
+	try:
+		l2.config( text = time_format(p.get_time()) + " / " + time_format(p.get_length()) )
+		root.after(100, timeline)
+	except:
+		pass
+
+# Calendar function
+def cal_date(date,month,year):
+	try:
+		mydate = dt.date(int(year),int(month),int(date))
+		weekday = calendar.day_name[mydate.weekday()]
+		return weekday
+	except:
+		ValueError
+
+# String functions
+def left(s, amount):
+    return s[:amount]
+
+def right(s, amount):
+    return s[-amount:]
+
+def mid(s, offset, amount):
+    return s[offset:offset+amount]
+
+# Root transparency function
+def root_trans(event):
+	val = Decimal(s1.get())/Decimal(100)
+	root.wm_attributes('-alpha',val)
+
+def time_format(tx, millisec = True):
+	"""Returns time in timestamp format."""
+	if millisec is True:
+		hours = tx/3600000
+		hours = '{:02d}'.format(hours)
+		minutes = (tx % 3600000)/60000
+		minutes = '{:02d}'.format(minutes)
+		secs = (tx % 60000)/1000
+		secs = '{:02d}'.format(secs)
+		time = str(hours)+":"+str(minutes)+":"+str(secs)
+	else:
+		h = left(tx, 2)
+		m = right(tx, 2)
+		time = str(h)+":"+str(m)+":"+str(00)
+	return time
+
+def time_now():
+	"""Returns current player time in timestamp format."""
+	return time_format(p.get_time())
+
+## Export Function for storing record
+def export(event):
+	tot_num = len(cust_count)
+	store_city = [attr_list[0]]*tot_num			#City
+	store_num = [attr_list[1]]*tot_num 			#Store
+	df_date =  sdt.strptime(attr_list[3],"%d %m %Y")	#Date
+	df_date = df_date.strftime("%d/%m/%Y")	
+	video_date = [df_date]*tot_num
+	video_start =[attr_list[5]]*tot_num 		#Start time
+	video_day = [attr_list[4]]*tot_num 		#Day
+
+	df = DataFrame({'# of Customers':cust_num, 'Description':cust_desc,
+			'Counter':cust_count,'Wait Time Start':cust_wst,'Wait Time End':cust_wet,
+			'Checkin Time start': cust_cst,'Checkin Time End':cust_cet,
+			'Store #': store_num,'City':store_city,'Date of Video':video_date,'Video Start Time' : video_start,
+			'TD of clicks':user_click,"Total Wait Time":cust_twt,"Total Checkout Time":cust_tct,"Day": video_day,
+			'Counter Desk': cust_desk,"Transaction Hour":cust_thr
+	})
+	ff_date = attr_list[3].replace(" ","")
+	ff_time = attr_list[5].replace(":","")
+	ff_time = ff_time.replace(" ","")
+	
+	# Name generation for saving csv
+	base = os.path.basename(file_path)
+	name_ext = os.path.splitext(base)[0]
+	base_name = "%s.csv"%name_ext
+	#file_name = os.path.join(savefilePath,base_name)
+	drop_name = os.path.join(dropfilePath,base_name)
+	print drop_name
+ 	# Saving csv
+	df.to_csv(base_name, header =  True, cols=['# of Customers','Counter Desk','Counter','Video Start Time','Transaction Hour','Description','Wait Time Start','Wait Time End','Total Wait Time','Checkin Time start','Checkin Time End','Total Checkout Time','Store #','City','Day','Date of Video','TD of clicks'],index = False)
+	try :
+		df.to_csv(drop_name, header =  True, cols=['# of Customers','Counter Desk','Counter','Video Start Time','Transaction Hour','Description','Wait Time Start','Wait Time End','Total Wait Time','Checkin Time start','Checkin Time End','Total Checkout Time','Store #','City','Day','Date of Video','TD of clicks'],index = False)
+	except :
+		ValueError
+	tkMessageBox.showinfo("Export to xlsx","File exported")
+
+# Opens Help window
+def helpwin():
+	app = info()
+
+
+
+# Row-like tiles for customer level info
+class gridTile(tk.Frame):
+	def __init__(self, parent, *args, **options):
+		tk.Frame.__init__(self, parent, *args, **options)
+
+		#self.pack(fill="x", expand=1, anchor="n", padx=2, pady=2)
+
+		self.grid(padx=2, pady=2, sticky="news")
+
+		xyz = 69
+
+		self.grid_columnconfigure(0, minsize = 100)
+		self.grid_columnconfigure(3, minsize = xyz)
+		self.grid_columnconfigure(4, minsize = xyz)
+		self.grid_columnconfigure(5, minsize = xyz)
+		self.grid_columnconfigure(6, minsize = xyz)
+
+		self.wst_flag = 0
+		self.wst_time = 0
+		self.wet_flag = 0
+		self.wet_time = 0
+		self.cst_flag = 0
+		self.cst_time = 0
+		self.cet_flag = 0
+		self.cet_time = 0
+		self.done_time = 0
+
+		def time_nowiff(t1,t2):
+			def get_secs(t):
+				x = t.split(':')
+				return int(x[0]) * 3600 + int(x[1]) * 60 + int(x[2])
+			dif = get_secs(t2)-get_secs(t1)
+			return str(dt.timedelta(seconds=dif))
+
+		def delete_me():
+			self.destroy()
+
+		def reset_me():
+			self.wst.config(text="-- : -- : --")
+			self.wet.config(text="-- : -- : --")
+			self.cst.config(text="-- : -- : --")
+			self.cet.config(text="-- : -- : --")
+			self.e1.delete(0,"end")
+			self.e2.delete(0,"end")
+			self.wst_flag = 0
+			self.wet_flag = 0
+			self.cst_flag = 0
+			self.cet_flag = 0
+
+		def destroyButton():
+			if self.cet_flag == 1:
+				if self.wst["text"] == "-- : -- : --":
+					self.wst.config(text = "00:00:00")
+					self.wet.config(text = "00:00:00")
+			# Reads input values and destroys the tile.
+			# wst - wait start time; wet - wait end time;
+			# cst - checkout start time; cet - checkout end time
+				done_time = time.time()
+				t_list = [self.wst_time,self.wet_time,self.cst_time,self.cet_time]
+				tn_list = []
+				for element in t_list :
+					if element > 0 :
+						tn_list.append(element)
+				print tn_list
+				t_min = min(tn_list)
+				print t_min
+				t_dif = done_time - t_min
+				diff_wt = time_nowiff(self.wst["text"],self.wet["text"])
+				diff_ct = time_nowiff(self.cst["text"],self.cet["text"])
+
+				cust_num.append(self.e1.get())
+				cust_desc.append(self.e2.get())
+
+				cname = self.cVar.get()
+				cTypeDict = {'Pro':'Pro_checkout ', 'Self':'Self_checkout ','Aided':'Aided_checkout ','Comm':'Commercial_checkout '}
+
+				alnum_sep = re.match(r"([a-zA-Z]+)([0-9]+)",cname)
+
+				cnum = alnum_sep.group(2)
+				
+				cname_final = cTypeDict[alnum_sep.group(1)]+cnum								
+				cust_count.append(cname_final)
+				cust_desk.append(alnum_sep.group(1))
+
+				cust_wst.append(self.wst["text"])
+				cust_wet.append(self.wet["text"])
+				cust_cst.append(self.cst["text"])
+				cust_cet.append(self.cet["text"])
+				cust_twt.append(diff_wt)
+				cust_tct.append(diff_ct)
+				user_click.append(t_dif)
+				sh_hour = int(attr_list[5][:2])
+				cs_hour = int(self.cst["text"][:2])
+				sh_mode = attr_list[5][len(attr_list[5])-2:]
+				if sh_mode == 'PM':
+					if sh_hour == 12:
+						pass
+					else :
+						sh_hour += 12
+				cust_thr.append(sh_hour + cs_hour)
+				self.destroy()
+			else:
+				pass
+
+		def u1(event):
+			replace = time_now()
+			self.wst_time = time.time()
+			self.wst_flag = 1
+			self.wst.config(text = replace)
+
+		def u2(event):
+			if self.wst_flag == 1:
+				replace = time_now()
+				self.wet_flag = 1
+				self.cst_flag = 1
+				self.wet.config(text = replace)
+				self.cst.config(text = replace)
+				self.wet_time = time.time()
+				self.cst_time = time.time()
+			else:
+				pass
+		def u3(event):
+			self.cst_time = time.time()
+			self.cst_flag = 1
+			replace = time_now()
+			self.cst.config(text = replace)
+			if self.wst_flag == 1:
+				self.wet_flag = 1
+				self.wet_time = time.time()
+				self.wet.config(text = replace)
+		def u4(event):
+			if self.cst_flag == 1:
+				self.cet_flag = 1
+				self.cet_time = time.time()
+				replace = time_now()
+				self.cet.config(text = replace)
+			else:
+				pass
+
+		# Creating list of counter types to show
+		self.counters_num = [1,2,3,4,5,6,7,8,9,10]
+
+		if attr_list[7] != "":
+			self.counters_num = attr_list[7].split(',')
+
+		self.cVar = tk.StringVar(self)
+
+		self.cust_counter=[]
+
+		for i in self.counters_num:
+			self.cust_counter.append(ctypeVar.get() + str(i))
+
+		# Grid Buttons
+		self.b1 = ttk.OptionMenu(self, self.cVar, *self.cust_counter)
+		self.b1.grid(row=0, column=0, padx=3)
+		self.e1 = ttk.Entry(self, textvariable= tk.IntVar(), width=3)
+		self.e1.grid(row=0, column=1, padx=3)
+		self.e1.name = "custnum"
+		self.e2 = ttk.Entry(self, textvariable= tk.StringVar(), width=5)
+		self.e2.grid(row=0, column=2, padx=3)
+		self.e2.name = "custdes"
+
+		# Time Labels
+		self.wst = ttk.Label(self, text="-- : -- : --")
+		self.wst.grid(row=0, column=3, padx=3)
+		self.wst.bind('<Button-1>',u1)
+
+		self.wet = ttk.Label(self, text="-- : -- : --")
+		self.wet.grid(row=0, column=4, padx=3)
+		self.wet.bind('<Button-1>',u2)
+
+		self.cst = ttk.Label(self, text="-- : -- : --")
+		self.cst.grid(row=0, column=5, padx=3)
+		self.cst.bind('<Button-1>',u3)
+
+		self.cet = ttk.Label(self, text="-- : -- : --")
+		self.cet.grid(row=0, column=6, padx=3)
+		self.cet.bind('<Button-1>',u4)
+
+		ttk.Button(self, text=u"\u2713", width=2, command=destroyButton).grid(row=0, column=7, padx=3)
+		ttk.Button(self, text="x", width=2, command=delete_me).grid(row=0, column=8, padx=3)
+		ttk.Button(self, text=u"\u21BB", width=2, command=reset_me).grid(row=0, column=9, padx=3)
+
+# Label for the Gridtiles
+class gridTileLabel(tk.Frame):
+	def __init__(self, parent):
+		tk.Frame.__init__(self, parent)
+		self.grid(padx=2, pady=2, sticky="news")
+
+		# Grid Buttons
+		self.b1 = ttk.Label(self, text="Counter")
+		self.b1.grid(row=0, column=0, padx=24)
+		self.e1 = ttk.Label(self, text="Cust#")
+		self.e1.grid(row=0, column=1, padx=4)
+		self.e1.name = "custnum"
+		self.e2 = ttk.Label(self, text="Desc.")
+		self.e2.grid(row=0, column=2, padx=2)
+		self.e2.name = "custdes"
+
+		# Time Labels
+		self.wst = ttk.Label(self, text="Wait Start")
+		self.wst.grid(row=0, column=3, padx=5)
+
+		self.wet = ttk.Label(self, text="Wait End")
+		self.wet.grid(row=0, column=4, padx=5)
+
+		self.cst = ttk.Label(self, text="Check In")
+		self.cst.grid(row=0, column=5, padx=5)
+
+		self.cet = ttk.Label(self, text="Check Out")
+		self.cet.grid(row=0, column=6, padx=5)
+
+		ttk.Label(self, text="Save").grid(row=0, column=7, padx=2)
+		ttk.Label(self, text="Del").grid(row=0, column=8, padx=2)
+		ttk.Label(self, text="Reset").grid(row=0, column=9, padx=2)
+
+# Welcome Screen
+class win():
+	def __init__(self):
+		self = tk.Tk()
+		self.resizable(width = False, height = False)
+		self.title("Video Details")
+		self.geometry("%dx%d+900+15" %(335,335))
+		wf = tk.Frame(self)
+		wf.pack()
+
+		def mainWindow():
+			if self.e1.get() and self.e2.get()  and self.e8.get() :
+				if self.e40.get() and self.e41.get() and self.e42.get() :
+					if self.e60.get() and self.e61.get() and self.e62.get() :
+						attr_list.append(self.e1.get()) # City
+						attr_list.append(self.e2.get()) # Store#
+						attr_list.append(self.e3.get()) # Camera
+
+						self.e4 = " ".join([self.e40.get(),self.e41.get(),self.e42.get()]) #Video Date
+						attr_list.append(self.e4)
+		
+						self.e5 = cal_date(self.e40.get(),self.e41.get(),self.e42.get()) #Video Day
+						attr_list.append(self.e5)
+				
+						self.e6 = "".join([self.e60.get(),":",self.e61.get(),":00 ",self.e62.get()]) #Video Start Time
+						attr_list.append(self.e6)
+	
+						attr_list.append(self.e7.get()) # Creator
+						attr_list.append(self.e8.get()) # Counters
+		
+						self.destroy()	
+						main()
+			else :
+				pass
+
+
+		labelList = ["City","Store #","Camera","Video Date","Week Day","Video Start Time","Creator","Counters"]
+		entryWidth = 16
+
+		self.cityDict = {'SF': '627-Emeryville',
+						'BOS': '2681-Norwood',
+						'DAL': '554-Arlington',
+						'ATL': '6940-Powder Spring'}
+
+		self.cityList = self.cityDict.keys()
+		self.storeList = self.cityDict.values()
+
+		# Widgets on the welcome frame
+		tk.Label(wf, text=labelList[0]).grid(row=0,column=0,padx=10,pady=10) # City
+		self.e1 = ttk.Combobox(wf, values=self.cityList, width=entryWidth)
+		self.e1.grid(row=0,column=1,padx=10,pady=10)
+
+		tk.Label(wf, text=labelList[1]).grid(row=1,column=0,padx=10,pady=10) # Store#
+		self.e2 = ttk.Combobox(wf, values=self.storeList, width=entryWidth)
+		self.e2.grid(row=1,column=1,padx=10,pady=10)
+
+		tk.Label(wf, text=labelList[2]).grid(row=2,column=0,padx=10,pady=10) # Camera
+		self.e3 = tk.Entry(wf, width=entryWidth+1)
+		self.e3.grid(row=2,column=1,padx=10,pady=10)
+
+		tk.Label(wf, text=labelList[3]).grid(row=3,column=0,padx=10,pady=10) # Video Date
+		dateFrame = tk.Frame(wf)
+		dateFrame.grid(row=3,column=1,padx=10,pady=10)
+
+		dateList = list(str(i).zfill(2) for i in range(1,31+1))
+		self.e40 = ttk.Combobox(dateFrame, values = dateList ,width=3) # Date
+		self.e40.grid(row=0,column=0,padx=1)
+		monthList = list(str(i).zfill(2) for i in range(1,12+1))
+		self.e41 = ttk.Combobox(dateFrame, values = monthList , width=3) # Month
+		self.e41.grid(row=0,column=1,padx=1)
+		yearList = list(range(2011,dt.date.today().year+1))
+		yearList.reverse()
+		self.e42 = ttk.Combobox(dateFrame, values = yearList, width=5) # Year
+		self.e42.grid(row=0,column=2,padx=1)
+
+		tk.Label(wf, text=labelList[5]).grid(row=5,column=0,padx=10,pady=10) # Video Start Time
+		startTimeFrame = tk.Frame(wf)
+		startTimeFrame.grid(row=5,column=1,padx=10,pady=10)
+
+		hourList = list(str(i).zfill(2) for i in range(1,12+1))
+		self.e60 = ttk.Combobox(startTimeFrame, values=hourList, width=3)
+		self.e60.grid(row=0,column=0,padx=1)
+		minList = list(str(15*i).zfill(2) for i in range(0,4))
+		self.e61 = ttk.Combobox(startTimeFrame, values=minList, width=3)
+		self.e61.grid(row=0,column=1,padx=1)
+		self.e62 = ttk.Combobox(startTimeFrame, values = ['AM','PM'], width=5)
+		self.e62.grid(row=0,column=2,padx=1)
+
+		tk.Label(wf, text=labelList[6]).grid(row=6,column=0,padx=10,pady=10) # Creator
+		self.e7 = tk.Entry(wf, width=entryWidth+1)
+		self.e7.grid(row=6,column=1,padx=10,pady=10)
+
+		tk.Label(wf, text=labelList[7]).grid(row=7,column=0,padx=10,pady=10) # Counters
+		self.e8 = tk.Entry(wf, width=entryWidth+1)
+		self.e8.grid(row=7,column=1,padx=10,pady=10)
+
+		ttk.Button(wf, text="Start", width=entryWidth, command=mainWindow).grid(row=8,column=0,columnspan=2,padx=5,pady=15)
+
+# Info Button
+class info:
+    def __init__(self):
+        self = tk.Tk()
+	self.title("Help")
+	self.geometry("%dx%d+900+15" %(500,500))
+        self.tree = ttk.Treeview(self,height=20)
+        self.tree.pack(expand=1, fill='both')
+	self.lift()
+	self.attributes('-topmost',True)
+
+	self.style = ttk.Style()
+	self.style.configure(".", font=('Helvetica', 10))
+
+	self.helpText1 = ["Counter Type:", "#", "+", "Export to xlsx", "Cust #", "Description", "Wait Start Time", \
+	"Wait End Time", "Checkout Start Time","Checkout End Time", \
+	"Open File		<Ctrl+O>", "Start", "Forward		<Page Down>", "Rewind		<Page Up>", \
+	"Play/Pause		<Shift-R>", "Speed+		<]>", "Speed-		<[>","Toggle Speed	<\>", "Stop","Slider"]
+
+	self.helpText2 = ["Choose the type of respective counter (Pro, Self or Aided).", "Counter number.\
+	 Can be changed from start window.", "Adds a row to the workspace", "Exports the saved rows as an excel sheet.",\
+	  "Number of customers per transaction.", "Description of the customer(s). (Optional)", \
+	  "Time at which customer has started waiting at the counter.", "Time at which waiting has ended for customer", \
+	  "Time at which transaction has started. Normally equal to \'Wait End Time\'", \
+	  "Time at which customer has left the counter", "Opens the chosen video file", "Plays the video", \
+	  "Jumps 15 secs forward", "Jumps 15 secs backward", "Toggles play and pause of the video", \
+	  "Increases playback speed by 1x upon each click", "Decreases playback speed by 1x upon each click",\
+	   "Toggles playback speed between current playback speed(>1.0) and 1.0", "Stops the playback",\
+	   "Transparency of the Widget"]
+
+        self.itemList=[]
+	for i in xrange(len(self.helpText1)):
+		self.itemList.append("item"+str(i))
+
+	for j in xrange(len(self.helpText1)):
+		self.tree.insert("", j+1, self.itemList[j], text=self.helpText1[j])
+		self.tree.insert(self.itemList[j], j+1, text=self.helpText2[j])
+
+# Main Screen Window
+def main(wd=575, ht=480):
+	global f1, f2, f3, f21, ctypeVar, root, s1, l1, l2
+
+	root = tk.Tk()
+	root.resizable(width = False, height = False)
+	root.title("Laser 1.0")
+	root.geometry("%dx%d+900+15" %(wd, ht))
+	root.wait_visibility(root)
+	root.wm_attributes('-alpha',0.75)
+	root.lift()
+	root.attributes('-topmost',True)
+
+	ht1 = 50
+	ht3 = 125
+	ht2 = ht-(ht1+ht3)
+
+	y1 = 1
+	y2 = ht1+1
+	y3 = ht1+ht2+1
+
+	def grid_with_arg():
+		if ctypeVar.get() != 'Counter Type:' :
+			gridTile(f21)
+		else:
+			pass
+
+	""" Frame 1 """
+	f1 = tk.LabelFrame(root)
+	f1.place(bordermode="outside", x=1, y=y1, height=ht1, width=wd-1, anchor="nw")
+
+	counters = ['Counter Type:','Pro','Aided','Self','Comm']
+	ctypeVar = tk.StringVar(root)
+	drop1 = ttk.OptionMenu(f1, ctypeVar, *counters)
+	drop1.place(bordermode="outside", height=30, width=130, relx=0.05, rely=0.2)
+
+	b = ttk.Button(f1, text='+', command=grid_with_arg, width=5)
+	b.place(bordermode="outside", height=30, width=45, relx=0.30, rely=0.2)
+
+	hb = ttk.Button(f1, text='?', command=helpwin) # help button
+	hb.place(bordermode="outside", height=30, width=20, relx=0.925, rely=0.2)	
+	
+	def progressPopup() :
+		dcount = len(cust_cet)
+		if tcount > 0 :
+			if dcount <= tcount :
+				tkMessageBox.showinfo("Progess:","Transactions Completed: %d%%" %((dcount*100)/tcount))
+			else:
+				tkMessageBox.showinfo("Progess:","Transactions Completed: 100%")
+		else:
+			tkMessageBox.showinfo("Progess:","Info not found")
+
+	pb = ttk.Button(f1, text='%', command=progressPopup) # progess button
+	pb.place(bordermode="outside", height=30, width=25, relx=0.525, rely=0.2)
+
+	eb = ttk.Button(f1, text='Export to xlsx') # export button
+	eb.place(bordermode="outside", height=30, width=125, relx=0.65, rely=0.2)
+	eb.bind('<Button-1>',export)
+
+	""" Frame 2 """
+	f2 = tk.LabelFrame(root)
+	f2.place(bordermode="outside", x=1, y=y2, height=ht2, width=wd-1, anchor="nw")
+
+	f20 = tk.LabelFrame(f2)
+	gridTileLabel(f20)
+	f20.pack()
+
+	f21 = tk.LabelFrame(f2)
+	f21.pack()
+
+	""" Frame 3 """
+	f3 = tk.LabelFrame(root)
+	f3.place(bordermode="outside", x=1, y=y3, height=ht3, width=wd-1, anchor="nw")
+
+	f3y1 = 0.25
+	f3y2 = 0.55
+
+	l1 = tk.Label(f3,text="")
+	l1.place(bordermode="outside", width = 500, relx = 0.05, rely = 0.06, anchor="nw")
+
+	b0 =  tk.Button(f3, text = "Open File")
+	b0.place(bordermode = "outside" , height = 30 , width = 75, relx = 0.05, rely = f3y1)
+	b0.bind('<Button-1>', FileOpen)
+
+	b1 =  tk.Button(f3, text = "Start")
+	b1.place(bordermode = "outside" , height = 30 , width = 75, relx = 0.05, rely = f3y2)
+	b1.bind('<Button-1>', start)
+
+	b2 =  tk.Button(f3, text = "Forward")
+	b2.place(bordermode = "outside" , height = 30 , width = 75, relx = 0.275, rely = f3y1)
+	b2.bind('<Button-1>', forward)
+
+	b3 =  tk.Button(f3, text = "Rewind")
+	b3.place(bordermode = "outside" , height = 30 , width = 75, relx = 0.275, rely = f3y2)
+	b3.bind('<Button-1>', rewind)
+
+	b4 =  tk.Button(f3, text = u"\u25B6"+" / "+u"\u25AE"*2)		#Play/Pause
+	b4.place(bordermode = "outside" , height = 60 , width = 75, relx = 0.425, rely = f3y1)
+	b4.bind('<Button-1>', pause)
+
+	b5 =  tk.Button(f3, text = "Speed+")
+	b5.place(bordermode = "outside" , height = 30 , width = 75, relx = 0.575, rely = f3y1)
+	b5.bind('<Button-1>',rate_up)
+
+	b6 =  tk.Button(f3, text = "Speed-")
+	b6.place(bordermode = "outside" , height = 30 , width = 75,relx = 0.575, rely = f3y2)
+	b6.bind('<Button-1>',rate_down)
+
+	b7 =  tk.Button(f3, text = "Stop")
+	b7.place(bordermode = "outside" , height = 30 , width = 75, relx = 0.8, rely = f3y2)
+	b7.bind('<Button-1>', stop)
+
+	s1 = tk.Scale(f3,from_ =40,to=100,orient="horizontal",length = 75,showvalue = 0)
+	s1.place(bordermode = "outside",relx = 0.8,rely=f3y1)
+	s1.bind('<ButtonRelease-1>',root_trans)
+
+	l2 = tk.Label(f3, text="hh:mm:ss / hh:mm:ss")
+	l2.place(bordermode="outside", width = 500, relx = 0.925,rely = 0.965, anchor="se")
+
+	def callback():
+		try:
+			p.stop()
+		except NameError:
+			pass
+		finally:
+			root.destroy()
+
+	def focuscallback(event): # Not being used as of 17Jun2016
+		try:
+ 			f1.focus()
+		except:
+			pass
+		finally:
+			pause(event)
+
+	root.bind_all('[',rate_down)
+	root.bind_all(']',rate_up)
+	root.bind_all('\\',rate_one)
+	root.bind_all('<Prior>',rewind)
+	root.bind_all('<Next>',forward)
+	root.bind_all('<Shift_R>',pause)
+	root.bind_all('<Control-O>',FileOpen)
+	root.bind_all('<Control-o>',FileOpen)
+
+	root.protocol("WM_DELETE_WINDOW", callback)
+	root.mainloop()
+
+if __name__ == "__main__":
+	win()
